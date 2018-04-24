@@ -9,4 +9,5 @@ export GF_SESSION_PROVIDER_CONFIG="user=$PGUSER password=$PGPASSWORD host=$PGHOS
 if [[ -z "${GF_USERS_ALLOW_SIGN_UP}" ]]; then
 	export GF_USERS_ALLOW_SIGN_UP="false"
 fi
-grafana/bin/grafana-server
+cd grafana
+bin/grafana-server
