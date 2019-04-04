@@ -1,7 +1,7 @@
 import store from 'app/core/store';
 import coreModule from 'app/core/core_module';
 
-var template = `
+const template = `
 <div class="layout-selector">
   <button ng-click="ctrl.listView()" ng-class="{active: ctrl.mode === 'list'}">
     <i class="fa fa-list"></i>
@@ -15,8 +15,8 @@ var template = `
 export class LayoutSelectorCtrl {
   mode: string;
 
-  /** @ngInject **/
-  constructor(private $rootScope) {
+  /** @ngInject */
+  constructor(private $rootScope: any) {
     this.mode = store.get('grafana.list.layout.mode') || 'grid';
   }
 
@@ -33,7 +33,7 @@ export class LayoutSelectorCtrl {
   }
 }
 
-/** @ngInject **/
+/** @ngInject */
 export function layoutSelector() {
   return {
     restrict: 'E',
@@ -45,19 +45,19 @@ export function layoutSelector() {
   };
 }
 
-/** @ngInject **/
-export function layoutMode($rootScope) {
+/** @ngInject */
+export function layoutMode($rootScope: any) {
   return {
     restrict: 'A',
     scope: {},
-    link: function(scope, elem) {
-      var layout = store.get('grafana.list.layout.mode') || 'grid';
-      var className = 'card-list-layout-' + layout;
+    link: (scope: any, elem: any) => {
+      const layout = store.get('grafana.list.layout.mode') || 'grid';
+      let className = 'card-list-layout-' + layout;
       elem.addClass(className);
 
       $rootScope.onAppEvent(
         'layout-mode-changed',
-        (evt, newLayout) => {
+        (evt: any, newLayout: any) => {
           elem.removeClass(className);
           className = 'card-list-layout-' + newLayout;
           elem.addClass(className);

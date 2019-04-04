@@ -1,62 +1,73 @@
+// @ts-ignore
 import _ from 'lodash';
+import angular from 'angular';
 import coreModule from 'app/core/core_module';
 import appEvents from 'app/core/app_events';
-import { DashboardModel } from 'app/features/dashboard/dashboard_model';
+import config from 'app/core/config';
+import { DashboardModel } from 'app/features/dashboard/state/DashboardModel';
+import { DashboardSearchHit } from 'app/types/search';
+import { ContextSrv } from './context_srv';
+import { FolderInfo, DashboardDTO } from 'app/types';
 
 export class BackendSrv {
-  private inFlightRequests = {};
-  private HTTP_REQUEST_CANCELLED = -1;
+  private inFlightRequests: { [key: string]: Array<angular.IDeferred<any>> } = {};
+  private HTTP_REQUEST_CANCELED = -1;
   private noBackendCache: boolean;
 
   /** @ngInject */
-  constructor(private $http, private alertSrv, private $q, private $timeout, private contextSrv) {}
+  constructor(
+    private $http: any,
+    private $q: angular.IQService,
+    private $timeout: angular.ITimeoutService,
+    private contextSrv: ContextSrv
+  ) {}
 
-  get(url, params?) {
-    return this.request({ method: 'GET', url: url, params: params });
+  get(url: string, params?: any) {
+    return this.request({ method: 'GET', url, params });
   }
 
-  delete(url) {
-    return this.request({ method: 'DELETE', url: url });
+  delete(url: string) {
+    return this.request({ method: 'DELETE', url });
   }
 
-  post(url, data) {
-    return this.request({ method: 'POST', url: url, data: data });
+  post(url: string, data: any) {
+    return this.request({ method: 'POST', url, data });
   }
 
-  patch(url, data) {
-    return this.request({ method: 'PATCH', url: url, data: data });
+  patch(url: string, data: any) {
+    return this.request({ method: 'PATCH', url, data });
   }
 
-  put(url, data) {
-    return this.request({ method: 'PUT', url: url, data: data });
+  put(url: string, data: any) {
+    return this.request({ method: 'PUT', url, data });
   }
 
-  withNoBackendCache(callback) {
+  withNoBackendCache(callback: any) {
     this.noBackendCache = true;
     return callback().finally(() => {
       this.noBackendCache = false;
     });
   }
 
-  requestErrorHandler(err) {
+  requestErrorHandler(err: any) {
     if (err.isHandled) {
       return;
     }
 
-    var data = err.data || { message: 'Unexpected error' };
+    let data = err.data || { message: 'Unexpected error' };
     if (_.isString(data)) {
       data = { message: data };
     }
 
     if (err.status === 422) {
-      this.alertSrv.set('Validation failed', data.message, 'warning', 4000);
+      appEvents.emit('alert-warning', ['Validation failed', data.message]);
       throw data;
     }
 
-    data.severity = 'error';
+    let severity = 'error';
 
     if (err.status < 500) {
-      data.severity = 'warning';
+      severity = 'warning';
     }
 
     if (data.message) {
@@ -66,16 +77,17 @@ export class BackendSrv {
         description = message;
         message = 'Error';
       }
-      this.alertSrv.set(message, description, data.severity, 10000);
+
+      appEvents.emit('alert-' + severity, [message, description]);
     }
 
     throw data;
   }
 
-  request(options) {
+  request(options: any) {
     options.retry = options.retry || 0;
-    var requestIsLocal = !options.url.match(/^http/);
-    var firstAttempt = options.retry === 0;
+    const requestIsLocal = !options.url.match(/^http/);
+    const firstAttempt = options.retry === 0;
 
     if (requestIsLocal) {
       if (this.contextSrv.user && this.contextSrv.user.orgId) {
@@ -89,23 +101,30 @@ export class BackendSrv {
     }
 
     return this.$http(options).then(
-      results => {
+      (results: any) => {
         if (options.method !== 'GET') {
           if (results && results.data.message) {
             if (options.showSuccessAlert !== false) {
-              this.alertSrv.set(results.data.message, '', 'success', 3000);
+              appEvents.emit('alert-success', [results.data.message]);
             }
           }
         }
         return results.data;
       },
-      err => {
+      (err: any) => {
         // handle unauthorized
         if (err.status === 401 && this.contextSrv.user.isSignedIn && firstAttempt) {
-          return this.loginPing().then(() => {
-            options.retry = 1;
-            return this.request(options);
-          });
+          return this.loginPing()
+            .then(() => {
+              options.retry = 1;
+              return this.request(options);
+            })
+            .catch((err: any) => {
+              if (err.status === 401) {
+                window.location.href = config.appSubUrl + '/logout';
+                throw err;
+              }
+            });
         }
 
         this.$timeout(this.requestErrorHandler.bind(this, err), 50);
@@ -114,7 +133,7 @@ export class BackendSrv {
     );
   }
 
-  addCanceler(requestId, canceler) {
+  addCanceler(requestId: string, canceler: angular.IDeferred<any>) {
     if (requestId in this.inFlightRequests) {
       this.inFlightRequests[requestId].push(canceler);
     } else {
@@ -122,31 +141,32 @@ export class BackendSrv {
     }
   }
 
-  resolveCancelerIfExists(requestId) {
-    var cancelers = this.inFlightRequests[requestId];
+  resolveCancelerIfExists(requestId: string) {
+    const cancelers = this.inFlightRequests[requestId];
     if (!_.isUndefined(cancelers) && cancelers.length) {
       cancelers[0].resolve();
     }
   }
 
-  datasourceRequest(options) {
+  datasourceRequest(options: any) {
+    let canceler: angular.IDeferred<any> = null;
     options.retry = options.retry || 0;
 
     // A requestID is provided by the datasource as a unique identifier for a
     // particular query. If the requestID exists, the promise it is keyed to
     // is canceled, canceling the previous datasource request if it is still
     // in-flight.
-    var requestId = options.requestId;
+    const requestId = options.requestId;
     if (requestId) {
       this.resolveCancelerIfExists(requestId);
       // create new canceler
-      var canceler = this.$q.defer();
+      canceler = this.$q.defer();
       options.timeout = canceler.promise;
       this.addCanceler(requestId, canceler);
     }
 
-    var requestIsLocal = !options.url.match(/^http/);
-    var firstAttempt = options.retry === 0;
+    const requestIsLocal = !options.url.match(/^http/);
+    const firstAttempt = options.retry === 0;
 
     if (requestIsLocal) {
       if (this.contextSrv.user && this.contextSrv.user.orgId) {
@@ -169,26 +189,33 @@ export class BackendSrv {
     }
 
     return this.$http(options)
-      .then(response => {
+      .then((response: any) => {
         if (!options.silent) {
           appEvents.emit('ds-request-response', response);
         }
         return response;
       })
-      .catch(err => {
-        if (err.status === this.HTTP_REQUEST_CANCELLED) {
+      .catch((err: any) => {
+        if (err.status === this.HTTP_REQUEST_CANCELED) {
           throw { err, cancelled: true };
         }
 
         // handle unauthorized for backend requests
         if (requestIsLocal && firstAttempt && err.status === 401) {
-          return this.loginPing().then(() => {
-            options.retry = 1;
-            if (canceler) {
-              canceler.resolve();
-            }
-            return this.datasourceRequest(options);
-          });
+          return this.loginPing()
+            .then(() => {
+              options.retry = 1;
+              if (canceler) {
+                canceler.resolve();
+              }
+              return this.datasourceRequest(options);
+            })
+            .catch((err: any) => {
+              if (err.status === 401) {
+                window.location.href = config.appSubUrl + '/logout';
+                throw err;
+              }
+            });
         }
 
         // populate error obj on Internal Error
@@ -220,11 +247,11 @@ export class BackendSrv {
     return this.request({ url: '/api/login/ping', method: 'GET', retry: 1 });
   }
 
-  search(query) {
+  search(query: any): Promise<DashboardSearchHit[]> {
     return this.get('/api/search', query);
   }
 
-  getDashboardBySlug(slug) {
+  getDashboardBySlug(slug: string) {
     return this.get(`/api/dashboards/db/${slug}`);
   }
 
@@ -236,7 +263,7 @@ export class BackendSrv {
     return this.get(`/api/folders/${uid}`);
   }
 
-  saveDashboard(dash, options) {
+  saveDashboard(dash: DashboardModel, options: any) {
     options = options || {};
 
     return this.post('/api/dashboards/db/', {
@@ -251,21 +278,11 @@ export class BackendSrv {
     return this.post('/api/folders', payload);
   }
 
-  updateFolder(folder, options) {
-    options = options || {};
-
-    return this.put(`/api/folders/${folder.uid}`, {
-      title: folder.title,
-      version: folder.version,
-      overwrite: options.overwrite === true,
-    });
-  }
-
-  deleteFolder(uid: string, showSuccessAlert) {
+  deleteFolder(uid: string, showSuccessAlert: boolean) {
     return this.request({ method: 'DELETE', url: `/api/folders/${uid}`, showSuccessAlert: showSuccessAlert === true });
   }
 
-  deleteDashboard(uid, showSuccessAlert) {
+  deleteDashboard(uid: string, showSuccessAlert: boolean) {
     return this.request({
       method: 'DELETE',
       url: `/api/dashboards/uid/${uid}`,
@@ -273,28 +290,28 @@ export class BackendSrv {
     });
   }
 
-  deleteFoldersAndDashboards(folderUids, dashboardUids) {
+  deleteFoldersAndDashboards(folderUids: string[], dashboardUids: string[]) {
     const tasks = [];
 
-    for (let folderUid of folderUids) {
+    for (const folderUid of folderUids) {
       tasks.push(this.createTask(this.deleteFolder.bind(this), true, folderUid, true));
     }
 
-    for (let dashboardUid of dashboardUids) {
+    for (const dashboardUid of dashboardUids) {
       tasks.push(this.createTask(this.deleteDashboard.bind(this), true, dashboardUid, true));
     }
 
     return this.executeInOrder(tasks, []);
   }
 
-  moveDashboards(dashboardUids, toFolder) {
+  moveDashboards(dashboardUids: string[], toFolder: FolderInfo) {
     const tasks = [];
 
-    for (let uid of dashboardUids) {
+    for (const uid of dashboardUids) {
       tasks.push(this.createTask(this.moveDashboard.bind(this), true, uid, toFolder));
     }
 
-    return this.executeInOrder(tasks, []).then(result => {
+    return this.executeInOrder(tasks, []).then((result: any) => {
       return {
         totalCount: result.length,
         successCount: _.filter(result, { succeeded: true }).length,
@@ -303,10 +320,10 @@ export class BackendSrv {
     });
   }
 
-  private moveDashboard(uid, toFolder) {
-    let deferred = this.$q.defer();
+  private moveDashboard(uid: string, toFolder: FolderInfo) {
+    const deferred = this.$q.defer();
 
-    this.getDashboardByUid(uid).then(fullDash => {
+    this.getDashboardByUid(uid).then((fullDash: DashboardDTO) => {
       const model = new DashboardModel(fullDash.dashboard, fullDash.meta);
 
       if ((!fullDash.meta.folderId && toFolder.id === 0) || fullDash.meta.folderId === toFolder.id) {
@@ -315,7 +332,7 @@ export class BackendSrv {
       }
 
       const clone = model.getSaveModelClone();
-      let options = {
+      const options = {
         folderId: toFolder.id,
         overwrite: false,
       };
@@ -324,7 +341,7 @@ export class BackendSrv {
         .then(() => {
           deferred.resolve({ succeeded: true });
         })
-        .catch(err => {
+        .catch((err: any) => {
           if (err.data && err.data.status === 'plugin-dashboard') {
             err.isHandled = true;
             options.overwrite = true;
@@ -333,7 +350,7 @@ export class BackendSrv {
               .then(() => {
                 deferred.resolve({ succeeded: true });
               })
-              .catch(err => {
+              .catch((err: any) => {
                 deferred.resolve({ succeeded: false });
               });
           } else {
@@ -345,14 +362,14 @@ export class BackendSrv {
     return deferred.promise;
   }
 
-  private createTask(fn, ignoreRejections, ...args: any[]) {
-    return result => {
+  private createTask(fn: Function, ignoreRejections: boolean, ...args: any[]) {
+    return (result: any) => {
       return fn
         .apply(null, args)
-        .then(res => {
+        .then((res: any) => {
           return Array.prototype.concat(result, [res]);
         })
-        .catch(err => {
+        .catch((err: any) => {
           if (ignoreRejections) {
             return result;
           }
@@ -362,9 +379,23 @@ export class BackendSrv {
     };
   }
 
-  private executeInOrder(tasks, initialValue) {
+  private executeInOrder(tasks: any[], initialValue: any[]) {
     return tasks.reduce(this.$q.when, initialValue);
   }
 }
 
 coreModule.service('backendSrv', BackendSrv);
+
+//
+// Code below is to expore the service to react components
+//
+
+let singletonInstance: BackendSrv;
+
+export function setBackendSrv(instance: BackendSrv) {
+  singletonInstance = instance;
+}
+
+export function getBackendSrv(): BackendSrv {
+  return singletonInstance;
+}

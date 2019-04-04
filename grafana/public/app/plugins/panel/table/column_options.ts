@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import kbn from 'app/core/utils/kbn';
+import { getValueFormats } from '@grafana/ui';
 
 export class ColumnOptionsCtrl {
   panel: any;
@@ -16,13 +16,13 @@ export class ColumnOptionsCtrl {
   mappingTypes: any;
 
   /** @ngInject */
-  constructor($scope) {
+  constructor($scope: any) {
     $scope.editor = this;
 
     this.activeStyleIndex = 0;
     this.panelCtrl = $scope.ctrl;
     this.panel = this.panelCtrl.panel;
-    this.unitFormats = kbn.getUnitFormats();
+    this.unitFormats = getValueFormats();
     this.colorModes = [
       { text: 'Disabled', value: null },
       { text: 'Cell', value: 'cell' },
@@ -41,6 +41,7 @@ export class ColumnOptionsCtrl {
       { text: 'YYYY-MM-DD HH:mm:ss.SSS', value: 'YYYY-MM-DD HH:mm:ss.SSS' },
       { text: 'MM/DD/YY h:mm:ss a', value: 'MM/DD/YY h:mm:ss a' },
       { text: 'MMMM D, YYYY LT', value: 'MMMM D, YYYY LT' },
+      { text: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
     ];
     this.mappingTypes = [{ text: 'Value to text', value: 1 }, { text: 'Range to text', value: 2 }];
 
@@ -48,7 +49,7 @@ export class ColumnOptionsCtrl {
       if (!this.panelCtrl.table) {
         return [];
       }
-      return _.map(this.panelCtrl.table.columns, function(col: any) {
+      return _.map(this.panelCtrl.table.columns, (col: any) => {
         return col.text;
       });
     };
@@ -60,13 +61,13 @@ export class ColumnOptionsCtrl {
     this.panelCtrl.render();
   }
 
-  setUnitFormat(column, subItem) {
+  setUnitFormat(column: any, subItem: any) {
     column.unit = subItem.value;
     this.panelCtrl.render();
   }
 
   addColumnStyle() {
-    var newStyleRule = {
+    const newStyleRule = {
       unit: 'short',
       type: 'number',
       alias: '',
@@ -79,13 +80,13 @@ export class ColumnOptionsCtrl {
       mappingType: 1,
     };
 
-    var styles = this.panel.styles;
-    var stylesCount = styles.length;
-    var indexToInsert = stylesCount;
+    const styles = this.panel.styles;
+    const stylesCount = styles.length;
+    let indexToInsert = stylesCount;
 
     // check if last is a catch all rule, then add it before that one
     if (stylesCount > 0) {
-      var last = styles[stylesCount - 1];
+      const last = styles[stylesCount - 1];
       if (last.pattern === '/.*/') {
         indexToInsert = stylesCount - 1;
       }
@@ -95,26 +96,26 @@ export class ColumnOptionsCtrl {
     this.activeStyleIndex = indexToInsert;
   }
 
-  removeColumnStyle(style) {
+  removeColumnStyle(style: any) {
     this.panel.styles = _.without(this.panel.styles, style);
   }
 
-  invertColorOrder(index) {
-    var ref = this.panel.styles[index].colors;
-    var copy = ref[0];
+  invertColorOrder(index: number) {
+    const ref = this.panel.styles[index].colors;
+    const copy = ref[0];
     ref[0] = ref[2];
     ref[2] = copy;
     this.panelCtrl.render();
   }
 
-  onColorChange(styleIndex, colorIndex) {
-    return newColor => {
-      this.panel.styles[styleIndex].colors[colorIndex] = newColor;
+  onColorChange(style: any, colorIndex: number) {
+    return (newColor: string) => {
+      style.colors[colorIndex] = newColor;
       this.render();
     };
   }
 
-  addValueMap(style) {
+  addValueMap(style: any) {
     if (!style.valueMaps) {
       style.valueMaps = [];
     }
@@ -122,12 +123,12 @@ export class ColumnOptionsCtrl {
     this.panelCtrl.render();
   }
 
-  removeValueMap(style, index) {
+  removeValueMap(style: any, index: number) {
     style.valueMaps.splice(index, 1);
     this.panelCtrl.render();
   }
 
-  addRangeMap(style) {
+  addRangeMap(style: any) {
     if (!style.rangeMaps) {
       style.rangeMaps = [];
     }
@@ -135,14 +136,14 @@ export class ColumnOptionsCtrl {
     this.panelCtrl.render();
   }
 
-  removeRangeMap(style, index) {
+  removeRangeMap(style: any, index: number) {
     style.rangeMaps.splice(index, 1);
     this.panelCtrl.render();
   }
 }
 
 /** @ngInject */
-export function columnOptionsTab($q, uiSegmentSrv) {
+export function columnOptionsTab($q: any, uiSegmentSrv: any) {
   'use strict';
   return {
     restrict: 'E',
