@@ -513,6 +513,7 @@ export function runQueries(exploreId: ExploreId, ignoreUIState = false) {
       supportsGraph,
       supportsLogs,
       supportsTable,
+      containerWidth,
     } = getState().explore[exploreId];
 
     if (!hasNonEmptyQuery(queries)) {
@@ -525,7 +526,7 @@ export function runQueries(exploreId: ExploreId, ignoreUIState = false) {
     // but we're using the datasource interval limit for now
     const interval = datasourceInstance.interval;
 
-    dispatch(runQueriesAction());
+    dispatch(runQueriesAction({ exploreId }));
     // Keep table queries first since they need to return quickly
     if ((ignoreUIState || showingTable) && supportsTable) {
       dispatch(
@@ -551,6 +552,7 @@ export function runQueries(exploreId: ExploreId, ignoreUIState = false) {
             interval,
             format: 'time_series',
             instant: false,
+            maxDataPoints: containerWidth,
           },
           makeTimeSeriesList
         )
