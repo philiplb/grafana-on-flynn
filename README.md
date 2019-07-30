@@ -1,7 +1,7 @@
 Grafana on Flynn
 ================
 
-This lets Grafana 6.2.1 run on Flynn.
+This lets Grafana 6.2.5 run on Flynn.
 
 ## Deployment
 
